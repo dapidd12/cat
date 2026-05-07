@@ -5,6 +5,12 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UploadCloud, FileText, Trash2, ArrowLeft, Users, Trophy } from 'lucide-react';
 import { parseQuestions } from '../services/geminiService';
 
+import * as pdfjsLib from 'pdfjs-dist';
+// @ts-ignore
+import mammoth from 'mammoth';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
 export default function RoomAdmin() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -41,11 +47,36 @@ export default function RoomAdmin() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) setter(event.target.result as string);
-    };
-    reader.readAsText(file);
+
+    const extension = file.name.split('.').pop()?.toLowerCase();
+
+    try {
+      if (extension === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((item: any) => item.str).join(' ');
+          fullText += pageText + '\n';
+        }
+        setter(fullText);
+      } else if (extension === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        setter(result.value);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) setter(event.target.result as string);
+        };
+        reader.readAsText(file);
+      }
+    } catch (err: any) {
+      console.error("Error reading file:", err);
+      alert("Gagal membaca file: " + file.name);
+    }
   };
 
   const handleGenerateAndMerge = async () => {

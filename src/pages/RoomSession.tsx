@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { doc, getDoc, collection, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Clock, ChevronRight, CheckCircle, Flag, XCircle, Trophy } from 'lucide-react';
+import { Clock, ChevronRight, CheckCircle, Flag, XCircle, Trophy, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function RoomSession() {
@@ -133,7 +133,14 @@ export default function RoomSession() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (loading) return <div className="p-8 font-bold uppercase text-2xl">Loading Session...</div>;
+  if (loading) return (
+    <div className="h-full flex items-center justify-center">
+      <div className="neo-card p-8 bg-white flex flex-col items-center gap-4">
+        <Loader2 size={48} strokeWidth={3} className="animate-spin text-[#ff5252]" />
+        <span className="font-black uppercase text-xl animate-pulse">Menyiapkan Sesi...</span>
+      </div>
+    </div>
+  );
   if (!questions || questions.length === 0) return <div className="p-8 font-bold uppercase text-2xl">Room Kosong</div>;
 
   const currentQuestion = questions[currentQuestionIndex];

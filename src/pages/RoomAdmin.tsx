@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { doc, getDoc, collection, query, getDocs, setDoc, deleteDoc, updateDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { UploadCloud, FileText, Trash2, ArrowLeft, Users, Trophy } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, ArrowLeft, Users, Trophy, Loader2 } from 'lucide-react';
 import { parseQuestions } from '../services/geminiService';
 
 import * as pdfjsLib from 'pdfjs-dist';
@@ -161,7 +161,14 @@ export default function RoomAdmin() {
     }
   }
 
-  if (!room) return <div className="p-8 font-bold uppercase text-2xl">Loading Room...</div>;
+  if (!room) return (
+    <div className="h-full flex items-center justify-center min-h-[50vh]">
+      <div className="neo-card p-8 bg-white flex flex-col items-center gap-4">
+        <Loader2 size={48} strokeWidth={3} className="animate-spin text-[#ff5252]" />
+        <span className="font-black uppercase text-xl animate-pulse">Memuat Room...</span>
+      </div>
+    </div>
+  );
 
   const appUrl = typeof window !== 'undefined' ? `${window.location.origin}/join/${room.token}` : '';
 
@@ -196,14 +203,14 @@ export default function RoomAdmin() {
             <h2 className="text-xl font-bold uppercase border-b-4 border-black pb-2 mb-4 bg-white inline-block px-3 py-1 border-4 shadow-[2px_2px_0_0_#000]">Tambah Soal AI</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                <div>
-                  <label className="block text-xs font-bold uppercase mb-2">Soal (.txt / paste)</label>
+                  <label className="block text-xs font-bold uppercase mb-2">Soal (.txt, .pdf, .docx, paste)</label>
                   <textarea value={qText} onChange={e => setQText(e.target.value)} className="w-full neo-input h-32 p-3 text-xs font-mono" placeholder="Paste soal..." />
-                  <input type="file" onChange={e => handleFileUpload(e, setQText)} className="text-xs font-bold mt-2" />
+                  <input type="file" accept=".txt,.pdf,.docx" onChange={e => handleFileUpload(e, setQText)} className="text-xs font-bold mt-2" />
                </div>
                <div>
-                  <label className="block text-xs font-bold uppercase mb-2">Kunci (.txt / paste)</label>
+                  <label className="block text-xs font-bold uppercase mb-2">Kunci (.txt, .pdf, .docx, paste)</label>
                   <textarea value={aText} onChange={e => setAText(e.target.value)} className="w-full neo-input h-32 p-3 text-xs font-mono" placeholder="Paste kunci (Opsional)..." />
-                  <input type="file" onChange={e => handleFileUpload(e, setAText)} className="text-xs font-bold mt-2" />
+                  <input type="file" accept=".txt,.pdf,.docx" onChange={e => handleFileUpload(e, setAText)} className="text-xs font-bold mt-2" />
                </div>
             </div>
             {error && <div className="bg-red-500 text-white font-bold p-2 border-2 border-black mb-4">{error}</div>}

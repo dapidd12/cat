@@ -16,13 +16,13 @@ export async function parseQuestions(questionsText: string, answerKeyText: strin
   const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: "gemini-3.1-pro-preview",
-    contents: `Parse the following questions text, and match them with the provided answer key text (if any).
+    contents: `Parse the following extracted document text, and find ONLY the multiple-choice questions (soal pilihan ganda). Ignore any essay, fill-in-the-blank, or irrelevant text. Match the extracted questions with the provided answer key text (if any).
     
 Create a structured JSON output representing the multiple-choice questions. 
-For each question:
+For each multiple choice question:
 - Extract the question text.
 - Extract all the options as an array of strings.
-- Identify the index of the correct answer (0-based) in the options array. If an answer key is provided, follow it strictly. If not, deduce the correct answer.
+- Identify the index of the correct answer (0-based) in the options array. If an answer key is provided, follow it strictly. If not, logically deduce the correct answer.
 - Provide a clear, brief explanation for why the answer is correct.
 
 Questions Text:

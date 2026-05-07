@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { User } from 'lucide-react';
+import { User, Loader2 } from 'lucide-react';
 
 export default function RoomJoin() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -73,7 +73,14 @@ export default function RoomJoin() {
     }
   };
 
-  if (loading) return <div className="p-8 font-bold uppercase text-2xl">Loading...</div>;
+  if (loading) return (
+    <div className="h-full flex items-center justify-center">
+      <div className="neo-card p-8 bg-white flex flex-col items-center gap-4">
+        <Loader2 size={48} strokeWidth={3} className="animate-spin text-[#ff5252]" />
+        <span className="font-black uppercase text-xl animate-pulse">Menyiapkan Ujian...</span>
+      </div>
+    </div>
+  );
 
   if (!room) return <div className="p-8 font-bold uppercase text-2xl bg-white border-4 border-black inline-block m-8 shadow-[4px_4px_0_0_#000]">Room Tidak Ditemukan!</div>;
 

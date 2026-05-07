@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { generateRoomToken } from '../lib/utils';
 import { useNavigate } from 'react-router';
-import { Plus, Trash2, Edit, Key, Clock, Settings, LogOut } from 'lucide-react';
+import { Plus, Trash2, Edit, Key, Clock, Settings, LogOut, Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -66,7 +66,14 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <div className="p-8 font-bold uppercase text-2xl">Loading...</div>;
+  if (loading) return (
+    <div className="h-full flex items-center justify-center">
+      <div className="neo-card p-8 bg-white flex flex-col items-center gap-4">
+        <Loader2 size={48} strokeWidth={3} className="animate-spin text-[#ff5252]" />
+        <span className="font-black uppercase text-xl animate-pulse">Memuat Dashboard...</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-8 flex flex-col gap-8">

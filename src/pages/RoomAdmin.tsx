@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { doc, getDoc, collection, query, getDocs, setDoc, deleteDoc, updateDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { UploadCloud, FileText, Trash2, ArrowLeft, Users, Trophy, Loader2 } from 'lucide-react';
-import { parseQuestions } from '../services/geminiService';
+import { UploadCloud, FileText, Trash2, ArrowLeft, Users, Trophy, Loader2, Settings2, PlusCircle } from 'lucide-react';
+import { parseQuestions, AIModelType } from '../services/geminiService';
 
 import * as pdfjsLib from 'pdfjs-dist';
 // @ts-ignore
@@ -23,11 +23,30 @@ export default function RoomAdmin() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
 
+  // AI Settings State (Loaded from LocalStorage)
+  const [aiModel, setAiModel] = useState<AIModelType>('gemini');
+  const [apiKey, setApiKey] = useState('');
+
+  // Manual Add State
+  const [manualText, setManualText] = useState('');
+  const [manualOptions, setManualOptions] = useState(['', '', '', '']);
+  const [manualCorrectIdx, setManualCorrectIdx] = useState(0);
+  const [manualExplanation, setManualExplanation] = useState('');
+
+  // Auto Close State
+  const [scheduledOpenAt, setScheduledOpenAt] = useState('');
+  const [scheduledCloseAt, setScheduledCloseAt] = useState('');
+
   const fetchData = async () => {
     if (!roomId) return;
     try {
       const docSnap = await getDoc(doc(db, 'rooms', roomId));
-      if (docSnap.exists()) setRoom({ id: docSnap.id, ...docSnap.data() });
+      if (docSnap.exists()) {
+         const data = docSnap.data();
+         setRoom({ id: docSnap.id, ...data });
+         if (data.scheduledOpenAt) setScheduledOpenAt(data.scheduledOpenAt);
+         if (data.scheduledCloseAt) setScheduledCloseAt(data.scheduledCloseAt);
+      }
 
       const qSnap = await getDocs(collection(db, 'rooms', roomId, 'questions'));
       const qData = qSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => a.number - b.number);
@@ -42,7 +61,19 @@ export default function RoomAdmin() {
 
   useEffect(() => {
     fetchData();
+    // Load local AI config
+    const savedModel = localStorage.getItem(`ai_model_${roomId}`) as AIModelType;
+    const savedKey = localStorage.getItem(`ai_key_${roomId}`);
+    if (savedModel) setAiModel(savedModel);
+    if (savedKey) setApiKey(savedKey);
   }, [roomId]);
+
+  const saveAIConfig = (model: AIModelType, key: string) => {
+     setAiModel(model);
+     setApiKey(key);
+     localStorage.setItem(`ai_model_${roomId}`, model);
+     localStorage.setItem(`ai_key_${roomId}`, key);
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
     const file = e.target.files?.[0];
@@ -84,13 +115,12 @@ export default function RoomAdmin() {
     setIsGenerating(true);
     setError('');
     try {
-      const generated = await parseQuestions(qText, aText);
+      const generated = await parseQuestions(qText, aText, aiModel, apiKey);
       
       let nextNumber = questions.length > 0 ? Math.max(...questions.map(q => q.number)) + 1 : 1;
       let added = 0;
       
       for (const q of generated) {
-         // Deduplication logic: If a question with very similar text already exists, skip it.
          const isDuplicate = questions.some(existingQ => 
             existingQ.text.trim().toLowerCase() === q.text.trim().toLowerCase()
          );
@@ -104,7 +134,7 @@ export default function RoomAdmin() {
            text: q.text,
            options: q.options,
            correctAnswerIndex: q.correctAnswerIndex,
-           explanation: q.explanation,
+           explanation: q.explanation || '',
            createdAt: serverTimestamp()
          });
          added++;
@@ -119,6 +149,36 @@ export default function RoomAdmin() {
       setIsGenerating(false);
     }
   };
+
+  const handleManualAdd = async () => {
+     if (!manualText.trim() || manualOptions.some(o => !o.trim())) {
+         alert("Soal dan semua opsi harus diisi!");
+         return;
+     }
+     
+     try {
+         let nextNumber = questions.length > 0 ? Math.max(...questions.map(q => q.number)) + 1 : 1;
+         const qRef = doc(collection(db, 'rooms', roomId!, 'questions'));
+         await setDoc(qRef, {
+           roomId: roomId,
+           number: nextNumber,
+           text: manualText,
+           options: manualOptions,
+           correctAnswerIndex: manualCorrectIdx,
+           explanation: manualExplanation || '',
+           createdAt: serverTimestamp()
+         });
+         setManualText('');
+         setManualOptions(['', '', '', '']);
+         setManualCorrectIdx(0);
+         setManualExplanation('');
+         fetchData();
+         alert("Soal manual berhasil ditambahkan!");
+     } catch (err) {
+         console.error(err);
+         alert("Gagal menambahkan soal.");
+     }
+  }
 
   const handleDeleteQuestion = async (qId: string) => {
     if(!window.confirm('Hapus soal?')) return;
@@ -143,6 +203,18 @@ export default function RoomAdmin() {
     }
   }
 
+  const handleUpdateSchedule = async (field: 'scheduledOpenAt' | 'scheduledCloseAt', value: string) => {
+     try {
+        await updateDoc(doc(db, 'rooms', roomId!), {
+           [field]: value,
+           updatedAt: serverTimestamp()
+        });
+        fetchData();
+     } catch(err) {
+        handleFirestoreError(err, OperationType.UPDATE, `rooms/${roomId}`);
+     }
+  }
+
   const handleToggleStatus = async () => {
     try {
       const newStatus = room.status === 'active' ? 'closed' : 'active';
@@ -151,7 +223,6 @@ export default function RoomAdmin() {
         updatedAt: serverTimestamp()
       };
       if (newStatus === 'active' && room.durationMinutes) {
-         // Auto close logic: open room + durationMinutes
          updates.expiresAt = new Date(Date.now() + room.durationMinutes * 60000);
       }
       await updateDoc(doc(db, 'rooms', roomId!), updates);
@@ -181,7 +252,7 @@ export default function RoomAdmin() {
           </button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight line-clamp-1">{room.name}</h1>
-            <div className="flex gap-4 mt-2 text-sm font-bold uppercase">
+            <div className="flex gap-4 mt-2 text-sm font-bold uppercase overflow-x-auto whitespace-nowrap hide-scroll">
               <span className="bg-[#a1ffa1] border-2 border-black px-2 py-0.5">TOKEN: {room.token}</span>
               <span className={room.status === 'active' ? 'text-green-600' : 'text-red-600'}>
                 {room.status === 'active' ? 'AKTIF' : 'DITUTUP'}
@@ -198,24 +269,86 @@ export default function RoomAdmin() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 flex flex-col gap-8">
+          
+          <div className="neo-card p-6 bg-white">
+            <h2 className="text-xl font-bold uppercase border-b-4 border-black pb-2 mb-4 bg-[#a1ffa1] inline-block px-3 py-1 border-4 shadow-[2px_2px_0_0_#000]">Tambah Soal Manual</h2>
+            <div className="flex flex-col gap-3">
+              <textarea placeholder="Tuliskan soal disini..." value={manualText} onChange={e => setManualText(e.target.value)} className="neo-input p-3 font-medium text-sm h-24" />
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                 {manualOptions.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                       <input 
+                         type="radio" 
+                         name="correctIdx" 
+                         checked={manualCorrectIdx === i} 
+                         onChange={() => setManualCorrectIdx(i)}
+                         className="w-5 h-5 accent-black"
+                       />
+                       <input 
+                         type="text" 
+                         placeholder={`Opsi ${String.fromCharCode(65 + i)}`}
+                         value={opt}
+                         onChange={e => {
+                            const newOpts = [...manualOptions];
+                            newOpts[i] = e.target.value;
+                            setManualOptions(newOpts);
+                         }}
+                         className="neo-input p-2 flex-1 text-sm"
+                       />
+                    </div>
+                 ))}
+                 <button onClick={() => setManualOptions([...manualOptions, ''])} className="border-4 border-black border-dashed flex items-center justify-center p-2 text-xs font-bold uppercase hover:bg-gray-100 transition">
+                    + Tambah Opsi
+                 </button>
+              </div>
+              
+              <input type="text" placeholder="Penjelasan jawaban (opsional)" value={manualExplanation} onChange={e => setManualExplanation(e.target.value)} className="neo-input p-3 text-sm mt-2" />
+              <button onClick={handleManualAdd} className="btn-primary mt-2 py-3 bg-[black] text-white flex justify-center gap-2">
+                <PlusCircle size={20} strokeWidth={3} /> TAMBAH MANUAL
+              </button>
+            </div>
+          </div>
+
           {/* Upload Section */}
           <div className="neo-card p-6 bg-[#ffa1f2]">
-            <h2 className="text-xl font-bold uppercase border-b-4 border-black pb-2 mb-4 bg-white inline-block px-3 py-1 border-4 shadow-[2px_2px_0_0_#000]">Tambah Soal AI</h2>
+            <h2 className="text-xl font-bold uppercase border-b-4 border-black pb-2 mb-4 bg-white inline-block px-3 py-1 border-4 shadow-[2px_2px_0_0_#000]">Tambah Soal via AI</h2>
+            
+            <div className="bg-white p-4 border-4 border-black shadow-[4px_4px_0_0_#000] mb-6 flex flex-col gap-3">
+               <h3 className="font-bold uppercase text-sm border-b-2 border-black pb-1 mb-2 flex items-center gap-2"><Settings2 size={16}/> Konfigurasi AI (Opsional)</h3>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase block mb-1">Pilih Model</label>
+                    <select value={aiModel} onChange={e => saveAIConfig(e.target.value as AIModelType, apiKey)} className="neo-input w-full p-2 text-sm bg-white">
+                       <option value="gemini">Gemini</option>
+                       <option value="deepseek">DeepSeek</option>
+                       <option value="claude">Claude (Not Recomended/CORS)</option>
+                       <option value="kimi">Kimi (Moonshot)</option>
+                       <option value="qwen">Qwen (DashScope)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase block mb-1">API Key Model</label>
+                    <input type="password" value={apiKey} onChange={e => saveAIConfig(aiModel, e.target.value)} placeholder="Biarkan kosong pakai Bawaan App" className="neo-input w-full p-2 text-sm" />
+                  </div>
+               </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                <div>
                   <label className="block text-xs font-bold uppercase mb-2">Soal (.txt, .pdf, .docx, paste)</label>
-                  <textarea value={qText} onChange={e => setQText(e.target.value)} className="w-full neo-input h-32 p-3 text-xs font-mono" placeholder="Paste soal..." />
-                  <input type="file" accept=".txt,.pdf,.docx" onChange={e => handleFileUpload(e, setQText)} className="text-xs font-bold mt-2" />
+                  <textarea value={qText} onChange={e => setQText(e.target.value)} className="w-full neo-input h-32 p-3 text-xs font-mono" placeholder="Paste materi / soal... AI akan menemukan pilihan ganda." />
+                  <input type="file" accept=".txt,.pdf,.docx" onChange={e => handleFileUpload(e, setQText)} className="text-xs font-bold mt-2 w-full" />
                </div>
                <div>
                   <label className="block text-xs font-bold uppercase mb-2">Kunci (.txt, .pdf, .docx, paste)</label>
                   <textarea value={aText} onChange={e => setAText(e.target.value)} className="w-full neo-input h-32 p-3 text-xs font-mono" placeholder="Paste kunci (Opsional)..." />
-                  <input type="file" accept=".txt,.pdf,.docx" onChange={e => handleFileUpload(e, setAText)} className="text-xs font-bold mt-2" />
+                  <input type="file" accept=".txt,.pdf,.docx" onChange={e => handleFileUpload(e, setAText)} className="text-xs font-bold mt-2 w-full" />
                </div>
             </div>
             {error && <div className="bg-red-500 text-white font-bold p-2 border-2 border-black mb-4">{error}</div>}
             <button onClick={handleGenerateAndMerge} disabled={isGenerating || !qText} className="w-full btn-primary py-3 bg-white text-black disabled:bg-gray-300 flex justify-center gap-2">
-              <FileText strokeWidth={3} /> {isGenerating ? 'MEMPROSES...' : 'GENERATE & TAMBAHKAN KESINI'}
+              <FileText strokeWidth={3} /> {isGenerating ? 'AI SEDANG MEMPROSES...' : 'GENERATE VIA AI'}
             </button>
           </div>
 
@@ -253,12 +386,26 @@ export default function RoomAdmin() {
              
              <div className="mb-4">
                <label className="block text-xs font-bold uppercase mb-2">Waktu Pengerjaan (Menit)</label>
-               <div className="flex gap-2">
-                 <input type="number" defaultValue={room.durationMinutes} onBlur={e => {
-                   const val = parseInt(e.target.value);
-                   if (!isNaN(val) && val >= 1) handleUpdateDuration(val);
-                 }} className="neo-input p-2 w-24 font-bold text-center" min="1" />
-               </div>
+               <input type="number" defaultValue={room.durationMinutes} onBlur={e => {
+                 const val = parseInt(e.target.value);
+                 if (!isNaN(val) && val >= 1) handleUpdateDuration(val);
+               }} className="neo-input p-2 w-full font-bold" min="1" />
+             </div>
+
+             <div className="mb-4">
+               <label className="block text-xs font-bold uppercase mb-2">Jadwal Buka (Opsional)</label>
+               <input type="datetime-local" value={scheduledOpenAt} onChange={e => {
+                  setScheduledOpenAt(e.target.value);
+                  handleUpdateSchedule('scheduledOpenAt', e.target.value);
+               }} className="neo-input p-2 w-full text-sm font-bold bg-white" />
+             </div>
+
+             <div className="mb-4">
+               <label className="block text-xs font-bold uppercase mb-2">Jadwal Tutup (Opsional)</label>
+               <input type="datetime-local" value={scheduledCloseAt} onChange={e => {
+                  setScheduledCloseAt(e.target.value);
+                  handleUpdateSchedule('scheduledCloseAt', e.target.value);
+               }} className="neo-input p-2 w-full text-sm font-bold bg-white" />
              </div>
 
              <div className="mb-4">
@@ -278,8 +425,8 @@ export default function RoomAdmin() {
                {leaderboard.map((lb, idx) => (
                  <div key={lb.id} className={`flex items-center gap-3 p-3 border-4 border-black ${idx === 0 ? 'bg-[#fceea1]' : idx === 1 ? 'bg-gray-100' : idx === 2 ? 'bg-[#ffebd6]' : 'bg-white'}`}>
                    <div className="font-black text-lg w-6 text-center">{idx + 1}</div>
-                   <div className="flex-1 font-bold truncate uppercase">{lb.participantName}</div>
-                   <div className="font-black text-xl whitespace-nowrap">{lb.score}/{lb.maxScore}</div>
+                   <div className="flex-1 font-bold truncate uppercase max-w-[120px]">{lb.participantName}</div>
+                   <div className="font-black text-xl ml-auto">{lb.score}/{lb.maxScore}</div>
                  </div>
                ))}
                {leaderboard.length === 0 && <p className="text-center font-bold uppercase text-xs text-gray-500">Belum ada peserta</p>}

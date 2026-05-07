@@ -38,12 +38,20 @@ export default function RoomJoin() {
     if (!name.trim() || !room || !roomId) return;
     
     let isExpired = false;
-    if (room.expiresAt && room.expiresAt.toDate() < new Date()) {
+    const now = new Date();
+
+    if (room.expiresAt && room.expiresAt.toDate() < now) {
        isExpired = true;
-       // Automatically close it locally for this session
-       if (room.status === 'active') {
-          // You could also trigger a write here, but read-only block is enough
-       }
+    }
+
+    if (room.scheduledOpenAt && new Date(room.scheduledOpenAt) > now) {
+       alert("Room belum dibuka! Harap tunggu hingga jadwal buka.");
+       return;
+    }
+
+    if (room.scheduledCloseAt && new Date(room.scheduledCloseAt) < now) {
+       alert("Room sudah ditutup sesuai jadwal!");
+       return;
     }
 
     if (room.status !== 'active' || isExpired) {
@@ -97,6 +105,18 @@ export default function RoomJoin() {
              <span>Waktu</span>
              <span>{room.durationMinutes} Menit</span>
            </div>
+           {room.scheduledOpenAt && (
+             <div className="flex justify-between font-bold text-sm uppercase">
+               <span>Buka</span>
+               <span>{new Date(room.scheduledOpenAt).toLocaleString()}</span>
+             </div>
+           )}
+           {room.scheduledCloseAt && (
+             <div className="flex justify-between font-bold text-sm uppercase">
+               <span>Tutup</span>
+               <span>{new Date(room.scheduledCloseAt).toLocaleString()}</span>
+             </div>
+           )}
            <div className="flex justify-between font-bold text-sm uppercase">
              <span>Jumlah Soal</span>
              <span>{qCount} Soal</span>

@@ -1,0 +1,6 @@
+{
+  "name": "AutoCAT - AI Test Generator",
+  "description": "Upload raw questions and answer keys, and let AI automatically generate a Computer Assisted Test (CAT) with explanations for you to practice.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

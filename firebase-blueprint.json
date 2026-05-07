@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user who can own rooms.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "A room for exams.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "token": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "When the room naturally expires and closes" },
+        "status": { "type": "string", "enum": ["active", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "token", "durationMinutes", "status", "createdAt"]
+    },
+    "RoomQuestion": {
+      "title": "RoomQuestion",
+      "description": "A question within a room.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "number": { "type": "number" },
+        "text": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswerIndex": { "type": "number" },
+        "explanation": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "number", "text", "options", "correctAnswerIndex", "explanation", "createdAt"]
+    },
+    "RoomSession": {
+      "title": "RoomSession",
+      "description": "A participant's test session in a room.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "participantName": { "type": "string" },
+        "score": { "type": "number" },
+        "maxScore": { "type": "number" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["taking", "finished"] }
+      },
+      "required": ["roomId", "participantName", "score", "maxScore", "startedAt", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Users collection."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "Room" },
+      "description": "Rooms collection."
+    },
+    "/rooms/{roomId}/questions/{questionId}": {
+      "schema": { "$ref": "RoomQuestion" },
+      "description": "Questions in a room."
+    },
+    "/rooms/{roomId}/sessions/{sessionId}": {
+      "schema": { "$ref": "RoomSession" },
+      "description": "Participant sessions in a room."
+    }
+  }
+}

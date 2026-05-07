@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #fceea1; /* Neobrutalist yellow base */
+  color: #000;
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  background-image: radial-gradient(#000000 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+#root {
+  height: 100%;
+}
+
+.neo-card {
+  background: white;
+  border: 4px solid #000;
+  box-shadow: 8px 8px 0px 0px #000;
+  border-radius: 0;
+}
+
+.neo-card-pink {
+  background: #ffa1f2;
+}
+.neo-card-blue {
+  background: #a1e2ff;
+}
+.neo-card-green {
+  background: #a1ffa1;
+}
+
+.sidebar-active {
+  background: #000;
+  color: #fff;
+}
+
+.btn-primary {
+  background: #ff5252;
+  color: white;
+  border: 4px solid #000;
+  box-shadow: 6px 6px 0px 0px #000;
+  border-radius: 0;
+  transition: all 0.1s ease;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0px 0px #000;
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: #000;
+  border: 4px solid #000;
+  box-shadow: 4px 4px 0px 0px #000;
+  border-radius: 0;
+  transition: all 0.1s ease;
+  font-weight: 700;
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000;
+}
+
+.ai-glow {
+  /* Used for highlighted active neobrutalist frames */
+  border: 4px solid #000;
+  box-shadow: 8px 8px 0px 0px #ff5252;
+}
+
+.neo-input {
+  background: #fff;
+  border: 4px solid #000;
+  box-shadow: 4px 4px 0px 0px #000;
+  border-radius: 0;
+  transition: all 0.1s ease;
+}
+
+.neo-input:focus {
+  outline: none;
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000;
+}
+
+/* Custom Scrollbar for NeoBrutalism */
+::-webkit-scrollbar {
+  width: 12px;
+  border-left: 2px solid #000;
+}
+
+::-webkit-scrollbar-track {
+  background: #fceea1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000;
+  border: 2px solid #000;
+}

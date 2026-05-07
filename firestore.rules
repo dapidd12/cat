@@ -1,0 +1,113 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definition
+    function isSignedIn() { return request.auth != null; }
+    function isGoogleAuth() { return isSignedIn() && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+    function isAdmin() { return isSignedIn() && request.auth.token.email == 'saqilakhalifah@gmail.com'; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role', 'createdAt'])
+        && data.email is string && data.email.size() <= 200
+        && data.role in ['user', 'admin']
+        && data.createdAt == request.time;
+    }
+
+    function isUpdateValidUser() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+        && incoming().get('displayName', '') is string;
+    }
+
+    function isValidRoom(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'token', 'durationMinutes', 'status', 'createdAt'])
+        && data.ownerId == request.auth.uid
+        && data.name is string && data.name.size() <= 100
+        && data.token is string && data.token.size() >= 4 && data.token.size() <= 20
+        && data.durationMinutes is number && data.durationMinutes > 0
+        && data.status in ['active', 'closed']
+        && data.createdAt == request.time;
+    }
+
+    function isUpdateValidRoom() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['name', 'durationMinutes', 'status', 'expiresAt', 'updatedAt'])
+        && incoming().get('name', existing().name) is string
+        && incoming().get('durationMinutes', existing().durationMinutes) is number
+        && incoming().get('status', existing().status) is string
+        && incoming().get('updatedAt', existing().createdAt) == request.time;
+    }
+
+    function isValidRoomQuestion(data) {
+      return data.keys().hasAll(['roomId', 'number', 'text', 'options', 'correctAnswerIndex', 'explanation', 'createdAt'])
+        && data.roomId is string
+        && data.number is number
+        && data.text is string && data.text.size() <= 50000
+        && data.options is list && data.options.size() <= 10 && data.options.size() > 0 && data.options[0] is string
+        && data.correctAnswerIndex is number
+        && data.explanation is string && data.explanation.size() <= 5000
+        && data.createdAt == request.time;
+    }
+
+    function isUpdateValidRoomQuestion() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['number', 'text', 'options', 'correctAnswerIndex', 'explanation', 'updatedAt'])
+        && incoming().get('text', existing().text) is string
+        && incoming().get('updatedAt', existing().createdAt) == request.time;
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll(['roomId', 'participantName', 'score', 'maxScore', 'startedAt', 'status', 'uid'])
+        && data.roomId is string
+        && data.participantName is string && data.participantName.size() <= 100
+        && data.score is number && data.score == 0
+        && data.maxScore is number
+        && data.status == 'taking'
+        && data.uid == request.auth.uid
+        && data.startedAt == request.time;
+    }
+
+    function isUpdateValidSession() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['score', 'status', 'finishedAt'])
+        && incoming().get('score', existing().score) is number
+        && incoming().get('status', existing().status) in ['taking', 'finished'];
+    }
+
+    // Collections
+    
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isGoogleAuth() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isGoogleAuth() && (request.auth.uid == userId || isAdmin()) && isUpdateValidUser();
+    }
+
+    match /rooms/{roomId} {
+      allow get: if true; // Anyone can get by token (roomId)
+      allow list: if isGoogleAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isGoogleAuth() && isValidRoom(incoming());
+      allow update: if (isGoogleAuth() && (existing().ownerId == request.auth.uid || isAdmin())) && isUpdateValidRoom();
+      allow delete: if isGoogleAuth() && (existing().ownerId == request.auth.uid || isAdmin());
+      
+      match /questions/{questionId} {
+        allow read: if true; // Anyone with roomId can read questions
+        allow create: if isGoogleAuth() && (get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || isAdmin()) && isValidRoomQuestion(incoming()) && incoming().roomId == roomId;
+        allow update: if isGoogleAuth() && (get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || isAdmin()) && isUpdateValidRoomQuestion();
+        allow delete: if isGoogleAuth() && (get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || isAdmin());
+      }
+      
+      match /sessions/{sessionId} {
+        allow read: if true; // Leaderboard is public
+        allow create: if isSignedIn() && isValidSession(incoming()) && incoming().roomId == roomId && exists(/databases/$(database)/documents/rooms/$(roomId));
+        allow update: if isSignedIn() && existing().uid == request.auth.uid && existing().status == 'taking' && isUpdateValidSession();
+      }
+    }
+  }
+}

@@ -61,7 +61,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const signInAsParticipant = async () => {
     if (!auth.currentUser) {
-      await signInAnonymously(auth);
+      try {
+        await signInAnonymously(auth);
+      } catch (err: any) {
+        if (err.code === 'auth/admin-restricted-operation') {
+          console.error("Please enable Anonymous Sign-in in Firebase Console -> Authentication -> Sign-in method");
+          alert("Gagal masuk. Admin belum mengaktifkan metode Login Anonim (Anonymous Sign-In) di Firebase Console.");
+        } else {
+          console.error(err);
+          alert("Gagal masuk sebagai peserta.");
+        }
+      }
     }
   };
 

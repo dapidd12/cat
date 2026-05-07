@@ -21,9 +21,9 @@ export default function RoomSession() {
   const [view, setView] = useState<'taking' | 'results'>('taking');
   
   const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [flagged, setFlagged] = useState<Record<string, boolean>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const initTest = async () => {
@@ -87,9 +87,8 @@ export default function RoomSession() {
     }
   }, [view, timeRemaining, loading]);
 
-  const handleSubmit = async (e?: React.MouseEvent) => {
-    if (e && !window.confirm("Apakah Anda yakin ingin menyelesaikan ujian?")) return;
-    
+  const handleSubmit = async () => {
+    setShowConfirm(false);
     // Calculate Score
     let score = 0;
     questions.forEach(q => {
@@ -115,16 +114,12 @@ export default function RoomSession() {
 
   const handleAnswer = (optionIndex: number) => {
     if (questions.length === 0) return;
+    const qId = questions[currentQuestionIndex].id;
+    if (answers[qId] !== undefined) return; // Prevent changing answer
     setAnswers(prev => ({
       ...prev,
-      [questions[currentQuestionIndex].id]: optionIndex
+      [qId]: optionIndex
     }));
-  };
-
-  const toggleFlag = () => {
-    if (questions.length === 0) return;
-    const qId = questions[currentQuestionIndex].id;
-    setFlagged(prev => ({ ...prev, [qId]: !prev[qId] }));
   };
 
   const formatTime = (seconds: number) => {
@@ -145,7 +140,6 @@ export default function RoomSession() {
 
   const currentQuestion = questions[currentQuestionIndex];
   const currentAnswer = answers[currentQuestion.id];
-  const isFlagged = flagged[currentQuestion.id];
 
   if (view === 'results') {
     const percentage = Math.round((session?.score / questions.length) * 100) || 0;
@@ -187,9 +181,9 @@ export default function RoomSession() {
 
   // view === 'taking'
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-6 w-full max-w-7xl mx-auto overflow-hidden p-4">
-      <div className="neo-card flex-1 flex flex-col overflow-hidden">
-         <div className="px-5 py-4 border-b-4 border-black bg-white flex items-center justify-between shrink-0">
+    <div className="h-full flex flex-col lg:flex-row w-full mx-auto bg-white sm:bg-transparent overflow-y-auto lg:overflow-hidden lg:p-4">
+      <div className="neo-card flex-1 flex flex-col min-h-[70vh] lg:min-h-0 sm:border-4 border-black sm:shadow-[4px_4px_0_0_#000] border-0 rounded-none sm:rounded-none">
+         <div className="px-5 py-4 border-b-4 border-black bg-white flex items-center justify-between shrink-0 sticky top-0 z-20">
            <div className="flex items-center gap-3">
              <span className="px-2 py-1 bg-black text-white text-[10px] font-bold rounded-sm uppercase tracking-wider hidden sm:block">{session?.participantName}</span>
              <h3 className="text-sm font-bold uppercase">Soal {currentQuestionIndex + 1} dari {questions.length}</h3>
@@ -200,7 +194,7 @@ export default function RoomSession() {
            </div>
          </div>
 
-         <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6">
+         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white space-y-6">
            <div className="flex gap-4">
              <div className="w-10 h-10 border-4 border-black bg-[#ffa1f2] text-black flex items-center justify-center font-bold text-lg shrink-0">
                {String(currentQuestionIndex + 1).padStart(2, '0')}
@@ -212,82 +206,103 @@ export default function RoomSession() {
                <div className="grid gap-3">
                  {currentQuestion.options.map((option: string, idx: number) => {
                    const isSelected = currentAnswer === idx;
+                   const isCorrectOption = currentQuestion.correctAnswerIndex === idx;
+                   const isAnswered = currentAnswer !== undefined;
+                   
+                   let optionClass = "bg-white hover:bg-[#f0f0f0] border-4 border-black";
+                   if (isAnswered) {
+                     if (isCorrectOption) {
+                       // Highlight correct answer in green
+                       optionClass = "bg-[#a1ffa1] border-4 border-black shadow-[4px_4px_0_0_#000] -translate-x-[2px] -translate-y-[2px] font-bold";
+                     } else if (isSelected && !isCorrectOption) {
+                       // Highlight wrong selection in red
+                       optionClass = "bg-[#ff5252] text-white border-4 border-black shadow-[4px_4px_0_0_#000] -translate-x-[2px] -translate-y-[2px] font-bold";
+                     } else {
+                       // Non-selected wrong answers are dimmed
+                       optionClass = "bg-gray-100 border-4 border-gray-300 text-gray-500 opacity-60 cursor-not-allowed";
+                     }
+                   } else if (isSelected) {
+                     optionClass = "bg-[#a1e2ff] font-bold shadow-[4px_4px_0_0_#000] -translate-x-[2px] -translate-y-[2px] border-4 border-black";
+                   }
+
                    return (
                      <button
                        key={idx}
                        onClick={() => handleAnswer(idx)}
-                       className={`p-4 text-sm flex items-center justify-between transition-transform cursor-pointer text-left border-4 border-black box-border ${
-                         isSelected 
-                           ? 'bg-[#a1e2ff] font-bold shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -translate-x-[2px] -translate-y-[2px]' 
-                           : 'bg-white hover:bg-[#f0f0f0]'
-                       }`}
+                       disabled={isAnswered}
+                       className={`p-4 text-sm flex items-center justify-between transition-transform cursor-pointer text-left box-border ${optionClass}`}
                      >
                        <div className="flex items-center gap-4">
-                         <span className="text-black font-bold uppercase">{String.fromCharCode(65 + idx)}.</span>
-                         <span className="text-black font-medium">{option}</span>
+                         <span className="font-bold uppercase">{String.fromCharCode(65 + idx)}.</span>
+                         <span className="font-medium">{option}</span>
                        </div>
-                       <div className={`w-5 h-5 border-2 border-black ${isSelected ? 'bg-black' : 'bg-white'}`}></div>
+                       <div className={`w-5 h-5 flex items-center justify-center border-2 ${isAnswered && (isSelected || isCorrectOption) ? 'border-transparent' : 'border-black bg-white'}`}>
+                         {isAnswered && isCorrectOption && <CheckCircle size={20} className={isSelected ? 'text-black' : 'text-black'} strokeWidth={3} />}
+                         {isAnswered && isSelected && !isCorrectOption && <XCircle size={20} className="text-white" strokeWidth={3} />}
+                         {!isAnswered && isSelected && <div className="w-full h-full bg-black"></div>}
+                       </div>
                      </button>
                    );
                  })}
                </div>
+
+               {currentAnswer !== undefined && currentQuestion.explanation && (
+                 <div className="mt-6 p-4 border-4 border-black bg-[#fceea1] animate-[fadeIn_0.3s_ease-out]">
+                   <h4 className="font-black uppercase text-sm mb-2 flex items-center gap-2">
+                     <Trophy size={16} strokeWidth={3} /> Pembahasan
+                   </h4>
+                   <p className="text-sm font-medium whitespace-pre-line">{currentQuestion.explanation}</p>
+                 </div>
+               )}
              </div>
            </div>
          </div>
 
-         <div className="h-20 px-5 border-t-4 border-black bg-white flex flex-row items-center justify-between shrink-0 gap-2">
+         <div className="h-auto py-4 sm:h-20 px-5 border-t-4 border-black bg-white flex flex-row items-center justify-between shrink-0 gap-2 sticky bottom-0 z-20">
            <div className="flex items-center gap-2 sm:gap-3">
              <button
                onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
                disabled={currentQuestionIndex === 0}
-               className="btn-secondary px-4 sm:px-6 py-2 text-xs sm:text-sm disabled:opacity-50"
+               className="btn-secondary px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm disabled:opacity-50"
              >
                Kembali
-             </button>
-             <button
-               onClick={toggleFlag}
-               className={`px-3 sm:px-6 py-2 text-xs sm:text-sm font-bold border-4 border-black flex items-center gap-2 transition-transform ${
-                 isFlagged 
-                   ? 'bg-[#fceea1] hover:scale-[1.02] shadow-[2px_2px_0_0_#000]' 
-                   : 'bg-white hover:bg-gray-100'
-               }`}
-             >
-               <Flag size={16} strokeWidth={3} className={isFlagged ? "fill-black" : ""} />
-               <span className="hidden sm:inline">{isFlagged ? 'Raguragu' : 'Ragu'}</span>
              </button>
            </div>
            
            {currentQuestionIndex === questions.length - 1 ? (
-             <button onClick={handleSubmit} className="px-4 sm:px-6 py-2 text-xs sm:text-sm font-bold bg-[#ff5252] text-white border-4 border-black flex items-center gap-2 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none shadow-[4px_4px_0_0_#000] transition-transform uppercase">
+             <button onClick={() => setShowConfirm(true)} className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold bg-[#ff5252] text-white border-4 border-black flex items-center gap-2 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none shadow-[4px_4px_0_0_#000] transition-transform uppercase">
                <CheckCircle size={18} strokeWidth={3} /> Selesai
              </button>
            ) : (
-             <button onClick={() => setCurrentQuestionIndex(Math.min(questions.length - 1, currentQuestionIndex + 1))} className="btn-primary px-4 sm:px-6 py-2 text-xs sm:text-sm flex items-center gap-2">
+             <button onClick={() => setCurrentQuestionIndex(Math.min(questions.length - 1, currentQuestionIndex + 1))} className="btn-primary px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm flex items-center gap-2">
                <span className="hidden sm:inline">Lanjut</span><ChevronRight size={18} strokeWidth={3} />
              </button>
            )}
          </div>
       </div>
 
-      <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-6">
-        <div className="neo-card p-5 h-full flex flex-col text-black bg-white">
+      <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-6 p-4 sm:p-0">
+        <div className="neo-card p-5 h-full flex flex-col text-black bg-white border-4 border-black shadow-[4px_4px_0_0_#000]">
           <h3 className="font-bold text-sm uppercase tracking-widest border-b-4 border-black pb-3 mb-4">Navigasi Soal</h3>
           
-          <div className="grid grid-cols-5 gap-3 content-start flex-grow overflow-y-auto pr-2">
+          <div className="grid grid-cols-6 sm:grid-cols-4 md:grid-cols-5 gap-2 content-start flex-grow overflow-y-auto pr-1">
             {questions.map((q, idx) => {
               const isAnswered = answers[q.id] !== undefined;
               const isCurrent = currentQuestionIndex === idx;
-              const isFlag = flagged[q.id];
+              const isCorrect = isAnswered && answers[q.id] === q.correctAnswerIndex;
 
               let btnClass = "w-full aspect-square border-2 border-black flex items-center justify-center font-bold text-xs transition-transform cursor-pointer relative hover:scale-105 ";
               if (isCurrent) btnClass += "border-4 border-black bg-white z-10 scale-110 shadow-[4px_4px_0_0_#000] ";
-              if (isFlag) btnClass += "bg-[#fceea1] text-black ";
-              else if (isAnswered) btnClass += "bg-[#a1e2ff] text-black ";
-              else btnClass += "bg-white text-black ";
+              
+              if (isAnswered) {
+                 if (isCorrect) btnClass += "bg-[#a1ffa1] text-black ";
+                 else btnClass += "bg-[#ff5252] text-white ";
+              } else {
+                 btnClass += "bg-white text-black hover:bg-gray-100 ";
+              }
 
               return (
                 <button key={q.id} onClick={() => setCurrentQuestionIndex(idx)} className={btnClass}>
-                  {isFlag && <div className="absolute top-0 right-0 w-3 h-3 bg-[#ff5252] border-b-2 border-l-2 border-black"></div>}
                   {idx + 1}
                 </button>
               );
@@ -296,22 +311,37 @@ export default function RoomSession() {
 
           <div className="mt-4 pt-4 border-t-4 border-black space-y-3 shrink-0 hidden sm:block">
               <div className="flex items-center gap-3 text-xs uppercase font-bold tracking-wider">
-                 <div className="w-5 h-5 border-2 border-black bg-[#a1e2ff]"></div> Terisi
+                 <div className="w-5 h-5 border-2 border-black bg-[#a1ffa1]"></div> Benar
               </div>
               <div className="flex items-center gap-3 text-xs uppercase font-bold tracking-wider">
-                 <div className="w-5 h-5 border-2 border-black bg-[#fceea1] relative overflow-hidden">
-                   <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#ff5252] border-b border-l border-black"></div>
-                 </div> Ragu
+                 <div className="w-5 h-5 border-2 border-black bg-[#ff5252]"></div> Salah
               </div>
               <div className="flex items-center gap-3 text-xs uppercase font-bold tracking-wider">
-                 <div className="w-5 h-5 border-2 border-black bg-white"></div> Kosong
+                 <div className="w-5 h-5 border-2 border-black bg-white"></div> Belum Dijawab
               </div>
           </div>
-          <button onClick={handleSubmit} className="w-full mt-6 py-3 border-4 border-black bg-[#ff5252] text-white font-bold text-sm uppercase hover:bg-black transition-colors">
+          <button onClick={() => setShowConfirm(true)} className="w-full mt-6 py-3 border-4 border-black bg-[#ff5252] text-white font-bold text-sm uppercase hover:bg-black transition-colors shrink-0">
             Kumpulkan Ujian
           </button>
         </div>
       </div>
+
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0_0_#000] max-w-sm w-full animate-[fadeIn_0.2s_ease-out]">
+            <h3 className="text-xl font-black uppercase border-b-4 border-black pb-2 mb-4">Selesai Ujian?</h3>
+            <p className="font-bold text-sm mb-6">Kamu yakin ingin mengumpulkan ujian ini sekarang? Setelah dikumpulkan, ujian tidak bisa diubah.</p>
+            <div className="flex justify-end gap-4">
+              <button onClick={() => setShowConfirm(false)} className="px-4 py-2 border-4 border-black font-bold uppercase transition hover:bg-gray-100">
+                Batal
+              </button>
+              <button onClick={handleSubmit} className="px-4 py-2 border-4 border-black bg-[#ff5252] text-white font-bold uppercase shadow-[4px_4px_0_0_#000] transition hover:translate-x-1 hover:translate-y-1 hover:shadow-none">
+                Ya, Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
